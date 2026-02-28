@@ -1,5 +1,6 @@
 #ifndef CRYPTO_MANAGER_H
 #define CRYPTO_MANAGER_H
+#include "ciphertext-ser.h"
 
 #include "openfhe.h"
 
@@ -13,6 +14,7 @@ private:
 public:
     CryptoContextManager();
     ~CryptoContextManager() = default;
+    std::string SerializeCiphertext(Ciphertext<DCRTPoly> ciphertext);
 
     void InitializeBFVContext();
 

@@ -12,6 +12,7 @@ find_package(Parquet REQUIRED)
 add_executable(ShieldedParquet 
     src/main.cpp 
     src/core/crypto_manager.cpp
+    src/core/parquet_handler.cpp
 )
 
 # 1. Provide the DIRECTORIES where the header files live
@@ -21,6 +22,7 @@ target_include_directories(ShieldedParquet PRIVATE
     /usr/local/include/openfhe/pke
     /usr/local/include/openfhe/binfhe
     /usr/local/include/openfhe/third-party/include
+    /usr/local/include/openfhe/core/metadata
 )
 
 # 2. Provide the exact .so files where the math logic lives

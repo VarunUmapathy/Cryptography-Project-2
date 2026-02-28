@@ -1,4 +1,8 @@
 #include "../include/crypto_manager.h"
+#include "../include/parquet_handler.h"
+#include "ciphertext-ser.h"
+#include "cryptocontext-ser.h"
+#include "scheme/bfvrns/bfvrns-ser.h"
 #include <iostream>
 #include <vector>
 
@@ -25,6 +29,8 @@ int main() {
     auto ciphertext = cc->Encrypt(publicKey, plaintextSalaries);
     std::cout << "[Client] Data Encrypted. Ciphertext size: " 
               << ciphertext->GetElements()[0].GetLength() << " polynomials." << std::endl;
+    std::string blob = cryptoManager.SerializeCiphertext(ciphertext);
+    WriteShieldedParquet("salaries.parquet", 101, blob);
 
     auto ciphertextDoubled = cc->EvalAdd(ciphertext, ciphertext);
     std::cout << "[Cloud] Executed Homomorphic Addition (Doubling salaries) blindly." << std::endl;

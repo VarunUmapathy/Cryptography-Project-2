@@ -1,4 +1,7 @@
 #include "../../include/crypto_manager.h"
+#include "ciphertext-ser.h"
+#include "cryptocontext-ser.h"
+#include "scheme/bfvrns/bfvrns-ser.h"
 #include <iostream>
 
 using namespace lbcrypto;
@@ -28,13 +31,24 @@ void CryptoContextManager::GenerateKeys() {
     
     keyPair = cryptoContext->KeyGen();
 
+    // Generate Relinerarization keys (Essential for BFV math stability)
     cryptoContext->EvalMultKeyGen(keyPair.secretKey);
+    
+    // Generate Index/Rotation keys (Good practice for SIMD vectors)
+    cryptoContext->EvalAtIndexKeyGen(keyPair.secretKey, {1, 2, -1, -2});
     
     std::cout << "Keys generated successfully!" << std::endl;
 }
 
 CryptoContext<DCRTPoly> CryptoContextManager::GetContext() const {
     return cryptoContext;
+}
+
+std::string CryptoContextManager::SerializeCiphertext(Ciphertext<DCRTPoly> ciphertext) {
+    std::stringstream ss;
+    // Serializes the ciphertext into a binary stream
+    Serial::Serialize(ciphertext, ss, SerType::BINARY);
+    return ss.str();
 }
 
 PublicKey<DCRTPoly> CryptoContextManager::GetPublicKey() const {
