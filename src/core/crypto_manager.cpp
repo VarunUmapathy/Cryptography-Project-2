@@ -51,6 +51,20 @@ std::string CryptoContextManager::SerializeCiphertext(Ciphertext<DCRTPoly> ciphe
     return ss.str();
 }
 
+Ciphertext<DCRTPoly> CryptoContextManager::DeserializeCiphertext(const std::string& serializedData) {
+    std::stringstream ss(serializedData);
+    Ciphertext<DCRTPoly> ciphertext;
+    
+    // Reconstruct the math object from the byte stream
+    try {
+        Serial::Deserialize(ciphertext, ss, SerType::BINARY);
+    } catch (const std::exception& e) {
+        std::cerr << "Deserialization Error: " << e.what() << std::endl;
+    }
+    
+    return ciphertext;
+}
+
 PublicKey<DCRTPoly> CryptoContextManager::GetPublicKey() const {
     return keyPair.publicKey;
 }

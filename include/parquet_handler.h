@@ -7,4 +7,6 @@
 // Declaration of the function so other files can see it
 void WriteShieldedParquet(const std::string& filename, int64_t id, const std::string& encrypted_blob);
 
+std::string ReadShieldedParquet(const std::string& filename);
+
 #endif

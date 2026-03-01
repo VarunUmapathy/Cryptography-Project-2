@@ -15,6 +15,7 @@ public:
     CryptoContextManager();
     ~CryptoContextManager() = default;
     std::string SerializeCiphertext(Ciphertext<DCRTPoly> ciphertext);
+    Ciphertext<DCRTPoly> DeserializeCiphertext(const std::string& serializedData);
 
     void InitializeBFVContext();
 
