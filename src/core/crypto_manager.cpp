@@ -2,6 +2,8 @@
 #include "ciphertext-ser.h"
 #include "cryptocontext-ser.h"
 #include "scheme/bfvrns/bfvrns-ser.h"
+#include <openssl/evp.h>
+#include <openssl/rand.h>
 #include <iostream>
 
 using namespace lbcrypto;
@@ -63,6 +65,51 @@ Ciphertext<DCRTPoly> CryptoContextManager::DeserializeCiphertext(const std::stri
     }
     
     return ciphertext;
+}
+
+void CryptoContextManager::GenerateAESKey() {
+    std::cout << "Generating AES-256 Key..." << std::endl;
+    aesKey.resize(32); // 32 bytes = 256 bits
+    // Use OpenSSL's cryptographically secure random number generator
+    RAND_bytes(aesKey.data(), 32); 
+    std::cout << "AES Key generated successfully!" << std::endl;
+}
+
+std::string CryptoContextManager::AESEncrypt(const std::string& plaintext) const {
+    if (aesKey.empty()) return "";
+
+    // 1. Generate a random 12-byte IV (Nonce)
+    unsigned char iv[12];
+    RAND_bytes(iv, sizeof(iv));
+
+    EVP_CIPHER_CTX *ctx = EVP_CIPHER_CTX_new();
+    EVP_EncryptInit_ex(ctx, EVP_aes_256_gcm(), NULL, aesKey.data(), iv);
+
+    std::vector<unsigned char> ciphertext(plaintext.length());
+    int len;
+    int ciphertext_len;
+
+    // 2. Encrypt the plaintext
+    EVP_EncryptUpdate(ctx, ciphertext.data(), &len, 
+                      (const unsigned char*)plaintext.data(), plaintext.length());
+    ciphertext_len = len;
+
+    // 3. Finalize and get the Authentication Tag
+    EVP_EncryptFinal_ex(ctx, ciphertext.data() + len, &len);
+    ciphertext_len += len;
+
+    unsigned char tag[16];
+    EVP_CIPHER_CTX_ctrl(ctx, EVP_CTRL_GCM_GET_TAG, 16, tag);
+    EVP_CIPHER_CTX_free(ctx);
+
+    // 4. Pack everything into one binary string: [IV(12)][CIPHERTEXT(N)][TAG(16)]
+    std::string result;
+    result.reserve(sizeof(iv) + ciphertext_len + sizeof(tag));
+    result.append((char*)iv, sizeof(iv));
+    result.append((char*)ciphertext.data(), ciphertext_len);
+    result.append((char*)tag, sizeof(tag));
+
+    return result;
 }
 
 PublicKey<DCRTPoly> CryptoContextManager::GetPublicKey() const {

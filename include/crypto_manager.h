@@ -1,6 +1,7 @@
 #ifndef CRYPTO_MANAGER_H
 #define CRYPTO_MANAGER_H
 #include "ciphertext-ser.h"
+#include <vector>
 
 #include "openfhe.h"
 
@@ -10,12 +11,16 @@ class CryptoContextManager {
 private:
     CryptoContext<DCRTPoly> cryptoContext;
     KeyPair<DCRTPoly> keyPair;
+    std::vector<unsigned char> aesKey;
 
 public:
     CryptoContextManager();
     ~CryptoContextManager() = default;
     std::string SerializeCiphertext(Ciphertext<DCRTPoly> ciphertext);
     Ciphertext<DCRTPoly> DeserializeCiphertext(const std::string& serializedData);
+
+    void GenerateAESKey();
+    std::string AESEncrypt(const std::string& plaintext) const;
 
     void InitializeBFVContext();
 

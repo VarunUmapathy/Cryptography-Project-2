@@ -3,6 +3,7 @@
 #include <fstream>
 #include <sstream>
 #include <vector>
+#undef duration
 #include <arrow/api.h>
 #include <arrow/io/api.h>
 #include <parquet/arrow/writer.h>
@@ -62,7 +63,7 @@ void IngestCSV(const std::string& csvFile,
                 (void)job_builder.Append(raw_value);
             } 
             else if (rule == EncryptionType::AES_GCM) {
-                std::string aes_blob = DummyAESEncrypt(raw_value);
+                std::string aes_blob = cryptoManager.AESEncrypt(raw_value);
                 (void)name_builder.Append(aes_blob);
             } 
             else if (rule == EncryptionType::FHE_BFV) {

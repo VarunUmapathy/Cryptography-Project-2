@@ -14,6 +14,7 @@ int main() {
     CryptoContextManager cryptoManager;
     cryptoManager.InitializeBFVContext();
     cryptoManager.GenerateKeys();
+    cryptoManager.GenerateAESKey();
 
     auto cc = cryptoManager.GetContext();
     auto publicKey = cryptoManager.GetPublicKey();
