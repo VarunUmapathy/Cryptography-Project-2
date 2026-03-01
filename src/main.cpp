@@ -1,62 +1,31 @@
 #include "../include/crypto_manager.h"
-#include "../include/parquet_handler.h"
-#include "ciphertext-ser.h"
-#include "cryptocontext-ser.h"
-#include "scheme/bfvrns/bfvrns-ser.h"
+#include "../include/schema_parser.h"
+#include "../include/csv_ingester.h"
 #include <iostream>
-#include <vector>
 
 using namespace lbcrypto;
 
 int main() {
-    std::cout << "=== Shielded-Parquet FHE Initialization ===" << std::endl;
+    std::cout << "=== Shielded-Parquet Hybrid Engine ===" << std::endl;
 
+    // 1. Initialize the cryptographic keys (FHE + AES)
     CryptoContextManager cryptoManager;
     cryptoManager.InitializeBFVContext();
     cryptoManager.GenerateKeys();
     cryptoManager.GenerateAESKey();
 
-    auto cc = cryptoManager.GetContext();
-    auto publicKey = cryptoManager.GetPublicKey();
-    auto secretKey = cryptoManager.GetSecretKey();
+    // 2. Load the JSON Schema rules
+    std::cout << "\n[Client] Loading encryption schema..." << std::endl;
+    DatasetSchema schema = ParseSchema("../src/schema.json");
+    
+    if (schema.columns.empty()) {
+        std::cerr << "Error: Failed to load schema.json or schema is empty!" << std::endl;
+        return -1;
+    }
 
-    std::vector<int64_t> mockSalaries = {85000, 112000, 95000, 150000};
-    std::cout << "\n[Client] Original Salaries: ";
-    for (auto salary : mockSalaries) std::cout << salary << " ";
-    std::cout << std::endl;
-
-    Plaintext plaintextSalaries = cc->MakePackedPlaintext(mockSalaries);
-
-    auto ciphertext = cc->Encrypt(publicKey, plaintextSalaries);
-    std::cout << "[Client] Data Encrypted. Ciphertext size: " 
-              << ciphertext->GetElements()[0].GetLength() << " polynomials." << std::endl;
-              
-    std::string blob = cryptoManager.SerializeCiphertext(ciphertext);
-    WriteShieldedParquet("salaries.parquet", 101, blob);
-
-    // -----------------------------------------------------------------
-    std::cout << "\n--- SIMULATING CLOUD COMPUTATION ---" << std::endl;
-
-    // 1. Read the BLOB from the Parquet file
-    std::string loadedBlob = ReadShieldedParquet("salaries.parquet");
-    std::cout << "[Cloud] Loaded " << loadedBlob.size() << " bytes from Parquet." << std::endl;
-
-    // 2. Turn bytes back into a Ciphertext math object
-    auto loadedCiphertext = cryptoManager.DeserializeCiphertext(loadedBlob);
-
-    // 3. Perform the math on the data loaded from DISK
-    auto resultFromDisk = cc->EvalAdd(loadedCiphertext, loadedCiphertext);
-    std::cout << "[Cloud] Computation on encrypted Parquet data complete." << std::endl;
-    // -----------------------------------------------------------------
-
-    std::cout << "\n--- SIMULATING CLIENT VERIFICATION ---" << std::endl;
-
-    // 4. Decrypt the result (The Client does this locally)
-    Plaintext finalResult;
-    cc->Decrypt(secretKey, resultFromDisk, &finalResult);
-    finalResult->SetLength(mockSalaries.size());
-
-    std::cout << "[Client] Final Decrypted Result from Disk: " << finalResult << std::endl;
+    // 3. Ingest the CSV, apply routing rules, and write Parquet
+    std::cout << "[Client] Starting CSV ingestion and hybrid encryption..." << std::endl;
+    IngestCSV("../src/data.csv", "sf_salaries_hybrid.parquet", schema, cryptoManager);
 
     return 0;
 }
