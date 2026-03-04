@@ -6,6 +6,8 @@
 #include <parquet/arrow/writer.h>
 #include <parquet/arrow/reader.h>
 #include <iostream>
+#include <nlohmann/json.hpp>
+using json = nlohmann::json;
 
 void WriteShieldedParquet(const std::string& filename, int64_t id, const std::string& encrypted_blob) {
     auto schema = arrow::schema({
@@ -77,6 +79,62 @@ std::string ReadShieldedParquet(const std::string& filename) {
 
     // 5. Get the raw bytes from the first row
     return binary_array->GetString(0);
+}
+
+void DecryptShieldedParquet(const std::string& inFile, CryptoContextManager& cryptoManager) {
+    auto open_res = arrow::io::ReadableFile::Open(inFile);
+    if (!open_res.ok()) return;
+    std::shared_ptr<arrow::io::ReadableFile> infile_stream = *open_res;
+
+    std::unique_ptr<parquet::arrow::FileReader> reader;
+    parquet::arrow::FileReaderBuilder builder;
+    (void)builder.Open(infile_stream);
+    (void)builder.Build(&reader);
+
+    std::shared_ptr<arrow::Table> table;
+    (void)reader->ReadTable(&table);
+
+    // Extract our columns
+    auto name_col = std::static_pointer_cast<arrow::BinaryArray>(table->GetColumnByName("EmployeeName")->chunk(0));
+    auto job_col = std::static_pointer_cast<arrow::StringArray>(table->GetColumnByName("JobTitle")->chunk(0));
+    auto basepay_col = std::static_pointer_cast<arrow::BinaryArray>(table->GetColumnByName("BasePay")->chunk(0));
+    auto overtime_col = std::static_pointer_cast<arrow::BinaryArray>(table->GetColumnByName("OvertimePay")->chunk(0));
+
+    auto cc = cryptoManager.GetContext();
+    auto secretKey = cryptoManager.GetSecretKey();
+
+    json results = json::array();
+
+    // Loop through the rows and decrypt based on the schema routing
+    for (int64_t i = 0; i < table->num_rows(); i++) {
+        json row;
+        
+        // 1. AES Decrypt (Symmetric)
+        row["EmployeeName"] = cryptoManager.AESDecrypt(name_col->GetString(i));
+        
+        // 2. Plaintext (No decryption needed)
+        row["JobTitle"] = job_col->GetString(i);
+        
+        // 3. FHE Decrypt BasePay (Asymmetric Post-Quantum Math)
+        auto basepay_cipher = cryptoManager.DeserializeCiphertext(basepay_col->GetString(i));
+        Plaintext basepay_plain;
+        cc->Decrypt(secretKey, basepay_cipher, &basepay_plain);
+        basepay_plain->SetLength(1);
+        row["BasePay_Doubled"] = basepay_plain->GetPackedValue()[0];
+
+        // 4. FHE Decrypt OvertimePay 
+        auto overtime_cipher = cryptoManager.DeserializeCiphertext(overtime_col->GetString(i));
+        Plaintext overtime_plain;
+        cc->Decrypt(secretKey, overtime_cipher, &overtime_plain);
+        overtime_plain->SetLength(1);
+        row["OvertimePay"] = overtime_plain->GetPackedValue()[0];
+
+        results.push_back(row);
+    }
+
+    // Print the JSON directly to the terminal for Python to capture
+    std::cout << "\n--- FINAL DECRYPTED DATA ---\n";
+    std::cout << results.dump(4) << std::endl;
 }
 
 void ProcessCloudCompute(const std::string& inFile, const std::string& outFile, CryptoContextManager& cryptoManager) {

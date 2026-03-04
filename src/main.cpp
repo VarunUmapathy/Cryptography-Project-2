@@ -33,11 +33,8 @@ int main(int argc, char* argv[]) {
         ProcessCloudCompute(argv[2], argv[3], cryptoManager);
     } 
     else if (command == "decrypt" && argc == 3) {
-        std::cout << "[Client] Loading context and Secret keys..." << std::endl;
         cryptoManager.LoadAllKeysFromDisk(key_dir);
-
-        std::cout << "[Client] Keys successfully loaded. (Decryption viewing coming next!)" << std::endl;
-        // In the next step, we will print the decrypted table to the terminal for Python!
-    } 
+        DecryptShieldedParquet(argv[2], cryptoManager);
+    }
     return 0;
 }

@@ -24,6 +24,7 @@ public:
     void LoadEvaluationKeysFromDisk(const std::string& path);
     void LoadAllKeysFromDisk(const std::string& path);
     std::string AESEncrypt(const std::string& plaintext) const;
+    std::string AESDecrypt(const std::string& ciphertext) const;
 
     void InitializeBFVContext();
 
