@@ -17,6 +17,12 @@
         button.cloud-btn { background-color: #ef4444; }
         button.cloud-btn:hover { background-color: #dc2626; }
         pre { background: #1e1e1e; color: #d4d4d4; padding: 15px; border-radius: 5px; overflow-x: auto; font-size: 0.85rem; }
+        table { width: 100%; border-collapse: collapse; margin-top: 15px; font-size: 0.85rem; }
+        th, td { border: 1px solid #ddd; padding: 8px; text-align: left; }
+        th { background-color: #f3f4f6; }
+        .viewer-btn { background-color: #6b7280; margin-top: 10px; }
+        .viewer-btn:hover { background-color: #4b5563; }
+        .table-container { overflow-x: auto; display: none; margin-top: 15px; }
     </style>
 </head>
 <body>
@@ -36,6 +42,8 @@
         </div>
         <button onclick="uploadFiles()">1. Encrypt & Send to Cloud</button>
         <pre id="uploadLog">Waiting for input...</pre>
+        <button class="viewer-btn" onclick="viewParquet('initial', 'table1')">👁️ View Encrypted Parquet Data</button>
+        <div id="table1" class="table-container"></div>
     </div>
 
     <div class="zone cloud-zone">
@@ -43,6 +51,8 @@
         <p>The server holds the Parquet file but has NO secret keys. It will perform math purely on ciphertexts.</p>
         <button class="cloud-btn" onclick="computeData()">2. Run FHE Math (Homomorphic EvalAdd)</button>
         <pre id="computeLog">Waiting for Parquet file...</pre>
+        <button class="viewer-btn" onclick="viewParquet('computed', 'table2')">👁️ View Computed Parquet Data</button>
+        <div id="table2" class="table-container"></div>
     </div>
 
     <div class="zone client-zone">
@@ -81,6 +91,33 @@
             const response = await fetch('/api/results');
             const result = await response.json();
             document.getElementById('decryptLog').innerText = result.data || result.detail;
+        }
+        async function viewParquet(stage, containerId) {
+            const container = document.getElementById(containerId);
+            container.innerHTML = "<p>Loading Parquet data...</p>";
+            container.style.display = "block";
+
+            try {
+                const response = await fetch(`/api/view/${stage}`);
+                if (!response.ok) throw new Error("File not ready yet.");
+                const data = await response.json();
+
+                // Build HTML Table
+                let html = "<table><thead><tr>";
+                data.columns.forEach(col => html += `<th>${col}</th>`);
+                html += "</tr></thead><tbody>";
+
+                data.rows.forEach(row => {
+                    html += "<tr>";
+                    data.columns.forEach(col => html += `<td>${row[col]}</td>`);
+                    html += "</tr>";
+                });
+                html += "</tbody></table>";
+
+                container.innerHTML = html;
+            } catch (err) {
+                container.innerHTML = `<p style="color: red;">${err.message}</p>`;
+            }
         }
     </script>
 </body>

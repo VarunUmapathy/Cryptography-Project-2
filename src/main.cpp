@@ -1,98 +1,43 @@
 #include "../include/crypto_manager.h"
 #include "../include/schema_parser.h"
 #include "../include/csv_ingester.h"
+#include "../include/parquet_handler.h"
 #include <iostream>
 #include <string>
 
 using namespace lbcrypto;
 
-void PrintUsage(const char* progName) {
-    std::cout << "=== Shielded-Parquet Hybrid Engine ===\n"
-              << "Usage: " << progName << " <command> [args...]\n\n"
-              << "Commands:\n"
-              << "  ingest  <csv_file> <schema_file> <out_parquet>\n"
-              << "  compute <in_parquet> <out_parquet>\n"
-              << "  decrypt <in_parquet>\n";
-}
-
 int main(int argc, char* argv[]) {
-    // 1. Ensure a command was provided
-    if (argc < 2) {
-        PrintUsage(argv[0]);
-        return -1;
-    }
-
+    if (argc < 2) return -1;
     std::string command = argv[1];
     CryptoContextManager cryptoManager;
 
-    // ==========================================
-    // COMMAND 1: INGEST (Client Side)
-    // ==========================================
-    if (command == "ingest") {
-        if (argc != 5) {
-            std::cerr << "Usage: ingest <csv_file> <schema_file> <out_parquet>" << std::endl;
-            return -1;
-        }
-        std::string csvFile = argv[2];
-        std::string schemaFile = argv[3];
-        std::string outFile = argv[4];
+    // We store keys in the same directory Python uses
+    std::string key_dir = "temp_data/";
 
-        std::cout << "[Client] Initializing new context and generating keys..." << std::endl;
+    if (command == "ingest" && argc == 5) {
+        std::cout << "[Client] Initializing context and generating keys..." << std::endl;
         cryptoManager.InitializeBFVContext();
         cryptoManager.GenerateKeys();
         cryptoManager.GenerateAESKey();
-        
-        // TODO: Save keys to a local folder so the next command can use them!
-        // cryptoManager.SaveKeysToDisk("keys/"); 
+        cryptoManager.SaveKeysToDisk(key_dir); 
 
-        std::cout << "[Client] Loading encryption schema..." << std::endl;
-        DatasetSchema schema = ParseSchema(schemaFile);
-        if (schema.columns.empty()) return -1;
-
-        std::cout << "[Client] Starting CSV ingestion..." << std::endl;
-        IngestCSV(csvFile, outFile, schema, cryptoManager);
+        DatasetSchema schema = ParseSchema(argv[3]);
+        IngestCSV(argv[2], argv[4], schema, cryptoManager);
     } 
-    
-    // ==========================================
-    // COMMAND 2: COMPUTE (Cloud Side)
-    // ==========================================
-    else if (command == "compute") {
-        if (argc != 4) {
-            std::cerr << "Usage: compute <in_parquet> <out_parquet>" << std::endl;
-            return -1;
-        }
-        std::string inFile = argv[2];
-        std::string outFile = argv[3];
-
+    else if (command == "compute" && argc == 4) {
         std::cout << "[Cloud] Loading context and Evaluation keys only..." << std::endl;
-        // TODO: cryptoManager.LoadEvaluationKeysFromDisk("keys/");
+        cryptoManager.LoadEvaluationKeysFromDisk(key_dir);
 
-        std::cout << "[Cloud] Simulating computation (Adding a bonus) on " << inFile << "..." << std::endl;
-        // TODO: Read Parquet, EvalAdd the FHE columns, write updated Parquet to outFile
+        std::cout << "[Cloud] Simulating computation (Doubling BasePay) blindly..." << std::endl;
+        ProcessCloudCompute(argv[2], argv[3], cryptoManager);
     } 
-    
-    // ==========================================
-    // COMMAND 3: DECRYPT (Client Side)
-    // ==========================================
-    else if (command == "decrypt") {
-        if (argc != 3) {
-            std::cerr << "Usage: decrypt <in_parquet>" << std::endl;
-            return -1;
-        }
-        std::string inFile = argv[2];
-
+    else if (command == "decrypt" && argc == 3) {
         std::cout << "[Client] Loading context and Secret keys..." << std::endl;
-        // TODO: cryptoManager.LoadAllKeysFromDisk("keys/");
+        cryptoManager.LoadAllKeysFromDisk(key_dir);
 
-        std::cout << "[Client] Decrypting and verifying results from " << inFile << "..." << std::endl;
-        // TODO: Read Parquet, decrypt AES and FHE columns, print to console as JSON
+        std::cout << "[Client] Keys successfully loaded. (Decryption viewing coming next!)" << std::endl;
+        // In the next step, we will print the decrypted table to the terminal for Python!
     } 
-    
-    else {
-        std::cerr << "Unknown command: " << command << std::endl;
-        PrintUsage(argv[0]);
-        return -1;
-    }
-
     return 0;
 }

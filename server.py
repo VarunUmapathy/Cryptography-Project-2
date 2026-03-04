@@ -4,6 +4,7 @@ from fastapi.staticfiles import StaticFiles
 import subprocess
 import os
 import shutil
+import pandas as pd
 
 app = FastAPI(title="Shielded-Parquet API")
 
@@ -72,6 +73,36 @@ async def decrypt_results():
     result = run_cpp_engine(["decrypt", in_parquet])
     return {"message": "Decryption complete", "data": result["output"]}
 
-# Optional: Mount a static folder if you want FastAPI to host your HTML/JS directly
-# os.makedirs(os.path.join(BASE_DIR, "static"), exist_ok=True)
-# app.mount("/", StaticFiles(directory="static", html=True), name="static")
+@app.get("/api/view/{stage}")
+async def view_parquet(stage: str):
+    """Reads the Parquet file and formats it for the web viewer."""
+    if stage == "initial":
+        filepath = os.path.join(TEMP_DIR, "hybrid.parquet")
+    elif stage == "computed":
+        filepath = os.path.join(TEMP_DIR, "hybrid_computed.parquet")
+    else:
+        raise HTTPException(status_code=400, detail="Invalid stage")
+
+    if not os.path.exists(filepath):
+        raise HTTPException(status_code=404, detail="File not found. Run the previous steps first.")
+
+    try:
+        df = pd.read_parquet(filepath)
+        display_data = []
+        
+        # Loop through rows and format binary ciphertext for display
+        for _, row in df.iterrows():
+            row_dict = {}
+            for col in df.columns:
+                val = row[col]
+                if isinstance(val, bytes):
+                    # Show the size and the first 20 hex characters
+                    hex_str = val.hex()[:20].upper()
+                    row_dict[col] = f"[🔒 CIPHERTEXT: {len(val)} bytes] 0x{hex_str}..."
+                else:
+                    row_dict[col] = str(val)
+            display_data.append(row_dict)
+
+        return {"columns": df.columns.tolist(), "rows": display_data}
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))

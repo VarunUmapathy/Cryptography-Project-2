@@ -20,6 +20,9 @@ public:
     Ciphertext<DCRTPoly> DeserializeCiphertext(const std::string& serializedData);
 
     void GenerateAESKey();
+    void SaveKeysToDisk(const std::string& path);
+    void LoadEvaluationKeysFromDisk(const std::string& path);
+    void LoadAllKeysFromDisk(const std::string& path);
     std::string AESEncrypt(const std::string& plaintext) const;
 
     void InitializeBFVContext();

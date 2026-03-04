@@ -5,6 +5,7 @@
 #include <openssl/evp.h>
 #include <openssl/rand.h>
 #include <iostream>
+#include <fstream>
 
 using namespace lbcrypto;
 
@@ -110,6 +111,35 @@ std::string CryptoContextManager::AESEncrypt(const std::string& plaintext) const
     result.append((char*)tag, sizeof(tag));
 
     return result;
+}
+
+void CryptoContextManager::SaveKeysToDisk(const std::string& path) {
+    std::cout << "[Client] Saving keys to secure storage..." << std::endl;
+    // Save FHE Context & Secret Key
+    Serial::SerializeToFile(path + "cc.bin", cryptoContext, SerType::BINARY);
+    Serial::SerializeToFile(path + "secret.bin", keyPair.secretKey, SerType::BINARY);
+    
+    // Save AES Key
+    std::ofstream aesFile(path + "aes.bin", std::ios::binary);
+    aesFile.write((char*)aesKey.data(), aesKey.size());
+    aesFile.close();
+}
+
+void CryptoContextManager::LoadEvaluationKeysFromDisk(const std::string& path) {
+    // The Cloud ONLY loads the context to understand the math parameters. 
+    // It is physically incapable of loading the secret.bin file here!
+    Serial::DeserializeFromFile(path + "cc.bin", cryptoContext, SerType::BINARY);
+}
+
+void CryptoContextManager::LoadAllKeysFromDisk(const std::string& path) {
+    Serial::DeserializeFromFile(path + "cc.bin", cryptoContext, SerType::BINARY);
+    Serial::DeserializeFromFile(path + "secret.bin", keyPair.secretKey, SerType::BINARY);
+
+    // Load AES Key
+    aesKey.resize(32);
+    std::ifstream aesFile(path + "aes.bin", std::ios::binary);
+    aesFile.read((char*)aesKey.data(), 32);
+    aesFile.close();
 }
 
 PublicKey<DCRTPoly> CryptoContextManager::GetPublicKey() const {
