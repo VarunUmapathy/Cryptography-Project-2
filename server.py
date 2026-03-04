@@ -1,5 +1,5 @@
 from fastapi import FastAPI, UploadFile, File, HTTPException
-from fastapi.responses import JSONResponse
+from fastapi.responses import JSONResponse, FileResponse
 from fastapi.staticfiles import StaticFiles
 import subprocess
 import os
@@ -12,6 +12,13 @@ TEMP_DIR = os.path.join(BASE_DIR, "temp_data")
 CPP_EXEC = os.path.join(BASE_DIR, "build", "ShieldedParquet")
 
 os.makedirs(TEMP_DIR, exist_ok=True)
+
+app.mount("/static", StaticFiles(directory=os.path.join(BASE_DIR, "static")), name="static")
+
+@app.get("/")
+async def serve_frontend():
+    """Serves the main HTML Web UI."""
+    return FileResponse(os.path.join(BASE_DIR, "static", "index.html"))
 
 def run_cpp_engine(args: list) -> dict:
     command = [CPP_EXEC] + args
