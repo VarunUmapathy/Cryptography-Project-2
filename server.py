@@ -84,7 +84,7 @@ async def view_parquet(stage: str):
         raise HTTPException(status_code=400, detail="Invalid stage")
 
     if not os.path.exists(filepath):
-        raise HTTPException(status_code=404, detail="File not found. Run the previous steps first.")
+        raise HTTPException(status_code=404, detail="File not found.")
 
     try:
         df = pd.read_parquet(filepath)
@@ -95,9 +95,8 @@ async def view_parquet(stage: str):
             for col in df.columns:
                 val = row[col]
                 if isinstance(val, bytes):
-                    hex_str = val.hex().upper()
-                    snippet = hex_str[-30:] if len(hex_str) > 30 else hex_str
-                    row_dict[col] = f"...{snippet}"
+                    # Send the FULL hex string to the frontend with a marker
+                    row_dict[col] = f"CIPHERTEXT_FULL:{val.hex().upper()}"
                 else:
                     row_dict[col] = str(val)
             display_data.append(row_dict)

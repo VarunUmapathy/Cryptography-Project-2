@@ -23,11 +23,20 @@
         .viewer-btn { background-color: #6b7280; margin-top: 10px; }
         .viewer-btn:hover { background-color: #4b5563; }
         .table-container { overflow-x: auto; display: none; margin-top: 15px; }
+        
+        /* Modal (Popup) Styles */
+        .modal { display: none; position: fixed; z-index: 1000; left: 0; top: 0; width: 100%; height: 100%; background-color: rgba(0,0,0,0.6); }
+        .modal-content { background-color: #fefefe; margin: 5% auto; padding: 20px; border-radius: 8px; width: 85%; max-width: 900px; box-shadow: 0 5px 15px rgba(0,0,0,0.3); }
+        .close { color: #aaa; float: right; font-size: 28px; font-weight: bold; cursor: pointer; }
+        .close:hover { color: black; }
+        .cipher-box { width: 97%; height: 400px; overflow-y: auto; word-wrap: break-word; word-break: break-all; background: #1e1e1e; color: #10b981; padding: 15px; font-family: monospace; font-size: 0.85rem; border-radius: 5px; margin-top: 15px;}
+        .view-details-btn { background-color: #10b981; color: white; border: none; padding: 6px 12px; border-radius: 4px; cursor: pointer; font-size: 0.8rem; }
+        .view-details-btn:hover { background-color: #059669; }
     </style>
 </head>
 <body>
 
-    <h1>🔒 Zero-Trust Data Pipeline</h1>
+    <h1>FHE-AES Encryption of Parquet Files</h1>
 
     <div class="zone client-zone">
         <h2>Client Zone: Encrypt & Upload</h2>
@@ -60,9 +69,22 @@
         <p>Download the computed Parquet file and use your local Secret Key to reveal the answers.</p>
         <button onclick="decryptData()">3. Decrypt Results</button>
         <pre id="decryptLog">Waiting for computation...</pre>
+        <div id="table3" class="table-container"></div>
+    </div>
+
+    <div id="cipherModal" class="modal">
+        <div class="modal-content">
+            <span class="close" onclick="closeModal()">&times;</span>
+            <h2 style="margin-top: 0;">Encrypted Payload</h2>
+            <div id="modalCipherContent" class="cipher-box"></div>
+        </div>
     </div>
 
     <script>
+        // Global object to store massive ciphertexts in memory instead of the HTML DOM
+        window.cipherStore = {};
+        let cipherCounter = 0;
+
         async function uploadFiles() {
             const csv = document.getElementById('csvFile').files[0];
             const schema = document.getElementById('schemaFile').files[0];
@@ -88,7 +110,10 @@
 
         async function decryptData() {
             const logContainer = document.getElementById('decryptLog');
+            const tableContainer = document.getElementById('table3');
+            
             logContainer.innerHTML = "Decrypting with local secret key... 🔑";
+            tableContainer.style.display = "none";
             
             try {
                 const response = await fetch('/api/results');
@@ -105,9 +130,11 @@
                     // Parse the JSON data from C++
                     const decryptedData = JSON.parse(jsonString);
                     
-                    // Build a beautiful HTML table for the plaintext results
-                    let html = `<div style="color: #10b981; font-weight: bold; margin-bottom: 10px;">${terminalLogs.replace(/\n/g, '<br>')}</div>`;
-                    html += "<table><thead><tr>";
+                    // 1. Put the terminal logs back into the dark terminal box
+                    logContainer.innerText = terminalLogs;
+                    
+                    // 2. Build the light-themed HTML table for the results
+                    let html = "<table><thead><tr>";
                     
                     // Extract column headers dynamically
                     const columns = Object.keys(decryptedData[0]);
@@ -122,16 +149,18 @@
                     });
                     html += "</tbody></table>";
                     
-                    logContainer.innerHTML = html;
+                    // 3. Inject the table into the new light-themed container
+                    tableContainer.innerHTML = html;
+                    tableContainer.style.display = "block";
                     
                 } else {
-                    // If something went wrong, just print the raw terminal output
                     logContainer.innerText = rawOutput;
                 }
             } catch (err) {
                 logContainer.innerText = "Error: " + err.message;
             }
         }
+
         async function viewParquet(stage, containerId) {
             const container = document.getElementById(containerId);
             container.innerHTML = "<p>Loading Parquet data...</p>";
@@ -142,25 +171,57 @@
                 if (!response.ok) throw new Error("File not ready yet.");
                 const data = await response.json();
 
-                // Build HTML Table
                 let html = "<table><thead><tr>";
                 data.columns.forEach(col => html += `<th>${col}</th>`);
                 html += "</tr></thead><tbody>";
 
                 data.rows.forEach(row => {
                     html += "<tr>";
-                    data.columns.forEach(col => html += `<td>${row[col]}</td>`);
+                    data.columns.forEach(col => {
+                        let cellValue = row[col];
+                        
+                        // If it's a ciphertext, render a button instead of the string!
+                        if (typeof cellValue === 'string' && cellValue.startsWith("CIPHERTEXT_FULL:")) {
+                            let fullHex = cellValue.substring(16);
+                            let bytes = (fullHex.length / 2).toLocaleString();
+                            let cid = 'cipher_' + cipherCounter++;
+                            
+                            // Save string to memory
+                            window.cipherStore[cid] = fullHex;
+                            
+                            // Render button
+                            html += `<td><button class="view-details-btn" onclick="openModal('${cid}')">View Details (${bytes} B)</button></td>`;
+                        } else {
+                            html += `<td>${cellValue}</td>`;
+                        }
+                    });
                     html += "</tr>";
                 });
                 html += "</tbody></table>";
-
                 container.innerHTML = html;
             } catch (err) {
                 container.innerHTML = `<p style="color: red;">${err.message}</p>`;
             }
         }
 
-        
+        // Modal Controls
+        function openModal(cipherId) {
+            document.getElementById('modalCipherContent').innerText = window.cipherStore[cipherId];
+            document.getElementById('cipherModal').style.display = "block";
+        }
+
+        function closeModal() {
+            document.getElementById('cipherModal').style.display = "none";
+            document.getElementById('modalCipherContent').innerText = ""; // Clear memory when closed
+        }
+
+        // Close modal if user clicks outside of the box
+        window.onclick = function(event) {
+            const modal = document.getElementById('cipherModal');
+            if (event.target == modal) {
+                closeModal();
+            }
+        }
     </script>
 </body>
 </html>
