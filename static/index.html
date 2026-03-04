@@ -87,10 +87,50 @@
         }
 
         async function decryptData() {
-            document.getElementById('decryptLog').innerText = "Decrypting with local secret key... 🔑";
-            const response = await fetch('/api/results');
-            const result = await response.json();
-            document.getElementById('decryptLog').innerText = result.data || result.detail;
+            const logContainer = document.getElementById('decryptLog');
+            logContainer.innerHTML = "Decrypting with local secret key... 🔑";
+            
+            try {
+                const response = await fetch('/api/results');
+                const result = await response.json();
+                
+                const rawOutput = result.data || result.detail;
+
+                // Check if the C++ engine outputted our specific JSON marker
+                if (rawOutput && rawOutput.includes("--- FINAL DECRYPTED DATA ---")) {
+                    const parts = rawOutput.split("--- FINAL DECRYPTED DATA ---");
+                    const terminalLogs = parts[0].trim();
+                    const jsonString = parts[1].trim();
+                    
+                    // Parse the JSON data from C++
+                    const decryptedData = JSON.parse(jsonString);
+                    
+                    // Build a beautiful HTML table for the plaintext results
+                    let html = `<div style="color: #10b981; font-weight: bold; margin-bottom: 10px;">${terminalLogs.replace(/\n/g, '<br>')}</div>`;
+                    html += "<table><thead><tr>";
+                    
+                    // Extract column headers dynamically
+                    const columns = Object.keys(decryptedData[0]);
+                    columns.forEach(col => html += `<th>${col}</th>`);
+                    html += "</tr></thead><tbody>";
+                    
+                    // Populate rows
+                    decryptedData.forEach(row => {
+                        html += "<tr>";
+                        columns.forEach(col => html += `<td>${row[col]}</td>`);
+                        html += "</tr>";
+                    });
+                    html += "</tbody></table>";
+                    
+                    logContainer.innerHTML = html;
+                    
+                } else {
+                    // If something went wrong, just print the raw terminal output
+                    logContainer.innerText = rawOutput;
+                }
+            } catch (err) {
+                logContainer.innerText = "Error: " + err.message;
+            }
         }
         async function viewParquet(stage, containerId) {
             const container = document.getElementById(containerId);
@@ -119,6 +159,8 @@
                 container.innerHTML = `<p style="color: red;">${err.message}</p>`;
             }
         }
+
+        
     </script>
 </body>
 </html>

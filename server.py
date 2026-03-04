@@ -90,15 +90,14 @@ async def view_parquet(stage: str):
         df = pd.read_parquet(filepath)
         display_data = []
         
-        # Loop through rows and format binary ciphertext for display
         for _, row in df.iterrows():
             row_dict = {}
             for col in df.columns:
                 val = row[col]
                 if isinstance(val, bytes):
-                    # Show the size and the first 20 hex characters
-                    hex_str = val.hex()[:20].upper()
-                    row_dict[col] = f"[🔒 CIPHERTEXT: {len(val)} bytes] 0x{hex_str}..."
+                    hex_str = val.hex().upper()
+                    snippet = hex_str[-30:] if len(hex_str) > 30 else hex_str
+                    row_dict[col] = f"...{snippet}"
                 else:
                     row_dict[col] = str(val)
             display_data.append(row_dict)
