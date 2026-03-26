@@ -1,73 +1,11 @@
 #include "../../include/crypto_manager.h"
-#include "ciphertext-ser.h"
-#include "cryptocontext-ser.h"
-#include "scheme/bfvrns/bfvrns-ser.h"
 #include <openssl/evp.h>
 #include <openssl/rand.h>
 #include <cstring>
 #include <iostream>
 #include <fstream>
 
-using namespace lbcrypto;
-
 CryptoContextManager::CryptoContextManager() {}
-
-void CryptoContextManager::InitializeBFVContext() {
-    std::cout << "Initializing BFV CryptoContext..." << std::endl;
-
-    CCParams<CryptoContextBFVRNS> parameters;
-    
-    parameters.SetPlaintextModulus(536903681); 
-    
-    parameters.SetMultiplicativeDepth(2);      
-
-    cryptoContext = GenCryptoContext(parameters);
-
-    cryptoContext->Enable(PKE);        
-    cryptoContext->Enable(KEYSWITCH);   
-    cryptoContext->Enable(LEVELEDSHE);
-
-    std::cout << "BFV Context initialized successfully!" << std::endl;
-}
-
-void CryptoContextManager::GenerateKeys() {
-    std::cout << "Generating Public and Private Keys..." << std::endl;
-    
-    keyPair = cryptoContext->KeyGen();
-
-    // Generate Relinerarization keys (Essential for BFV math stability)
-    cryptoContext->EvalMultKeyGen(keyPair.secretKey);
-    
-    // Generate Index/Rotation keys (Good practice for SIMD vectors)
-    cryptoContext->EvalAtIndexKeyGen(keyPair.secretKey, {1, 2, -1, -2});
-    
-    std::cout << "Keys generated successfully!" << std::endl;
-}
-
-CryptoContext<DCRTPoly> CryptoContextManager::GetContext() const {
-    return cryptoContext;
-}
-
-std::string CryptoContextManager::SerializeCiphertext(Ciphertext<DCRTPoly> ciphertext) {
-    std::stringstream ss;
-    // Serializes the ciphertext into a binary stream
-    Serial::Serialize(ciphertext, ss, SerType::BINARY);
-    return ss.str();
-}
-
-Ciphertext<DCRTPoly> CryptoContextManager::DeserializeCiphertext(const std::string& serializedData) {
-    std::stringstream ss(serializedData);
-    Ciphertext<DCRTPoly> ciphertext;
-    
-    // Reconstruct the math object from the byte stream
-    try {
-        Serial::Deserialize(ciphertext, ss, SerType::BINARY);
-    } catch (const std::exception& e) {
-        std::cerr << "Deserialization Error: " << e.what() << std::endl;
-    }
-    
-    return ciphertext;
-}
 
 void CryptoContextManager::GenerateAESKey() {
     std::cout << "Generating AES-256 Key..." << std::endl;
@@ -145,41 +83,4 @@ std::string CryptoContextManager::AESDecrypt(const std::string& packed_ciphertex
     } else {
         return "[AUTH_TAG_VERIFICATION_FAILED]";
     }
-}
-
-void CryptoContextManager::SaveKeysToDisk(const std::string& path) {
-    std::cout << "[Client] Saving keys to secure storage..." << std::endl;
-    // Save FHE Context & Secret Key
-    Serial::SerializeToFile(path + "cc.bin", cryptoContext, SerType::BINARY);
-    Serial::SerializeToFile(path + "secret.bin", keyPair.secretKey, SerType::BINARY);
-    
-    // Save AES Key
-    std::ofstream aesFile(path + "aes.bin", std::ios::binary);
-    aesFile.write((char*)aesKey.data(), aesKey.size());
-    aesFile.close();
-}
-
-void CryptoContextManager::LoadEvaluationKeysFromDisk(const std::string& path) {
-    // The Cloud ONLY loads the context to understand the math parameters. 
-    // It is physically incapable of loading the secret.bin file here!
-    Serial::DeserializeFromFile(path + "cc.bin", cryptoContext, SerType::BINARY);
-}
-
-void CryptoContextManager::LoadAllKeysFromDisk(const std::string& path) {
-    Serial::DeserializeFromFile(path + "cc.bin", cryptoContext, SerType::BINARY);
-    Serial::DeserializeFromFile(path + "secret.bin", keyPair.secretKey, SerType::BINARY);
-
-    // Load AES Key
-    aesKey.resize(32);
-    std::ifstream aesFile(path + "aes.bin", std::ios::binary);
-    aesFile.read((char*)aesKey.data(), 32);
-    aesFile.close();
-}
-
-PublicKey<DCRTPoly> CryptoContextManager::GetPublicKey() const {
-    return keyPair.publicKey;
-}
-
-PrivateKey<DCRTPoly> CryptoContextManager::GetSecretKey() const {
-    return keyPair.secretKey;
 }
