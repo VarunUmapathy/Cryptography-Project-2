@@ -77,16 +77,16 @@ void DecryptShieldedParquet(
     (void)reader->ReadTable(&table);
 
     // Extract columns safely
-    auto name_col = std::static_pointer_cast<arrow::BinaryArray>(
+    auto name_col = std::static_pointer_cast<arrow::StringArray>(
         table->GetColumnByName("EmployeeName")->chunk(0));
 
     auto job_col = std::static_pointer_cast<arrow::StringArray>(
         table->GetColumnByName("JobTitle")->chunk(0));
 
-    auto basepay_col = std::static_pointer_cast<arrow::BinaryArray>(
+    auto basepay_col = std::static_pointer_cast<arrow::StringArray>(
         table->GetColumnByName("BasePay")->chunk(0));
 
-    auto overtime_col = std::static_pointer_cast<arrow::BinaryArray>(
+    auto overtime_col = std::static_pointer_cast<arrow::StringArray>(
         table->GetColumnByName("OvertimePay")->chunk(0));
 
     json results = json::array();
@@ -99,6 +99,7 @@ void DecryptShieldedParquet(
         std::string overtime_blob = overtime_col->GetString(i);
 
         // AES decrypt
+        //std::cout << "[READ] From Parquet: " << name_blob << std::endl;
         row["EmployeeName"] = cryptoManager.AESDecrypt(name_blob);
 
         // Plaintext
@@ -144,22 +145,22 @@ void ProcessCloudCompute(
     (void)reader->ReadTable(&table);
 
     // Extract columns
-    auto name_col = std::static_pointer_cast<arrow::BinaryArray>(
+    auto name_col = std::static_pointer_cast<arrow::StringArray>(
         table->GetColumnByName("EmployeeName")->chunk(0));
 
     auto job_col = std::static_pointer_cast<arrow::StringArray>(
         table->GetColumnByName("JobTitle")->chunk(0));
 
-    auto basepay_col = std::static_pointer_cast<arrow::BinaryArray>(
+    auto basepay_col = std::static_pointer_cast<arrow::StringArray>(
         table->GetColumnByName("BasePay")->chunk(0));
 
-    auto overtime_col = std::static_pointer_cast<arrow::BinaryArray>(
+    auto overtime_col = std::static_pointer_cast<arrow::StringArray>(
         table->GetColumnByName("OvertimePay")->chunk(0));
 
     // Builders for new file
-    arrow::BinaryBuilder new_name, new_basepay, new_overtime;
+    arrow::StringBuilder new_name, new_basepay, new_overtime;
     arrow::StringBuilder new_job;
-
+    //std::cout << "[DEBUG] Input rows: " << table->num_rows() << "\n";
     for (int64_t i = 0; i < table->num_rows(); i++) {
         std::string enc_base = basepay_col->GetString(i);
 

@@ -25,7 +25,7 @@ public:
     }
 
     int64_t Decrypt(const std::string& cipher) override {
-        return std::stoll(cipher.substr(4, cipher.size() - 5));
+        return std::stoll(cipher.substr(4, cipher.size() - 1));
     }
 
     std::string Add(const std::string& a, const std::string& b) override {
@@ -71,6 +71,7 @@ int main(int argc, char* argv[]) {
         fhe->GenerateKeys();
 
         cryptoManager.GenerateAESKey();
+        cryptoManager.SaveAESKey(key_dir+"aes.key");
         //cryptoManager.SaveKeysToDisk(key_dir);
         fhe->SaveKeys(key_dir);
         DatasetSchema schema = ParseSchema(schemaFile);
@@ -88,7 +89,7 @@ int main(int argc, char* argv[]) {
         std::string outFile = argv[3];
 
         std::cout << "[Cloud] Loading evaluation keys...\n";
-
+        cryptoManager.LoadAESKey(key_dir+"aes.key");
         fhe->LoadEvalKeys(key_dir);
 
         ProcessCloudCompute(inFile, outFile, cryptoManager, fhe);
@@ -105,6 +106,7 @@ int main(int argc, char* argv[]) {
         std::cout << "[Client] Loading keys...\n";
 
         //cryptoManager.LoadAllKeysFromDisk(key_dir);
+        cryptoManager.LoadAESKey(key_dir+"aes.key");
         fhe->LoadAllKeys(key_dir);
 
         DecryptShieldedParquet(inFile, cryptoManager, fhe);

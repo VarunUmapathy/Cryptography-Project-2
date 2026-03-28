@@ -32,10 +32,10 @@ void IngestCSV(const std::string& csvFile,
     std::ifstream file(csvFile);
     if (!file.is_open()) return;
 
-    arrow::BinaryBuilder name_builder;
+    arrow::StringBuilder name_builder;
     arrow::StringBuilder job_builder;
-    arrow::BinaryBuilder basepay_builder;
-    arrow::BinaryBuilder overtime_builder;
+    arrow::StringBuilder basepay_builder;
+    arrow::StringBuilder overtime_builder;
 
     std::string line;
     bool isHeader = true;
@@ -53,7 +53,15 @@ void IngestCSV(const std::string& csvFile,
                 job_builder.Append(val);
             }
             else if (rule == EncryptionType::AES_GCM) {
-                name_builder.Append(cryptoManager.AESEncrypt(val));
+                std::string enc = cryptoManager.AESEncrypt(val);
+
+                //std::cout << "[INGEST] Plain: " << val << std::endl;
+                //std::cout << "[INGEST] Encrypted(Base64): " << enc << std::endl;
+
+                if (!name_builder.Append(enc).ok()) {
+                    std::cerr << "Append failed\n";
+                }
+                //name_builder.Append(cryptoManager.AESEncrypt(val));
             }
             else if (rule == EncryptionType::FHE_BFV) {
                 std::string enc = fhe->Encrypt(std::stoll(val));
@@ -71,10 +79,10 @@ void IngestCSV(const std::string& csvFile,
     overtime_builder.Finish(&over_arr);
 
     auto schema_arrow = arrow::schema({
-        arrow::field("EmployeeName", arrow::binary()),
+        arrow::field("EmployeeName", arrow::utf8()),
         arrow::field("JobTitle", arrow::utf8()),
-        arrow::field("BasePay", arrow::binary()),
-        arrow::field("OvertimePay", arrow::binary())
+        arrow::field("BasePay", arrow::utf8()),
+        arrow::field("OvertimePay", arrow::utf8())
     });
 
     auto table = arrow::Table::Make(schema_arrow, {name_arr, job_arr, base_arr, over_arr});
