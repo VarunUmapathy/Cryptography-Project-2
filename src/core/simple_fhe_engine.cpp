@@ -81,14 +81,22 @@ public:
        KEY GENERATION
        ========================= */
     void GenerateKeys() override {
-
         sk.s.resize(POLY_DEGREE);
         pk.a.resize(POLY_DEGREE);
         pk.b.resize(POLY_DEGREE);
 
         for (int i = 0; i < POLY_DEGREE; i++) {
-            sk.s[i] = rand() % 2;      // small binary secret
-            pk.a[i] = rand() % Q;      // random a
+            sk.s[i] = rand() % 2;
+            pk.a[i] = rand() % Q;
+        }
+
+        // Now generate relinearization keys
+        evk.rlk0.resize(POLY_DEGREE);
+        evk.rlk1.resize(POLY_DEGREE);
+
+        for (int i = 0; i < POLY_DEGREE; i++) {
+            evk.rlk0[i] = rand() % Q;
+            evk.rlk1[i] = Mod(sk.s[i] * sk.s[i]);
         }
 
         // ✅ CORRECT RLWE: b = -a ⊗ s
@@ -234,7 +242,6 @@ public:
     /* =========================
        MULTIPLY + RELINEARIZE
        ========================= */
-    int64_t SCALE_FACTOR = Q / T;
 
     std::string Multiply(const std::string& a, const std::string& b) override {
 
@@ -251,6 +258,8 @@ public:
             R.c1[i] = Mod(R.c1[i] + temp[i]);
 
         R.c2 = PolyMul(A.c1, B.c1);
+
+        R.noise = A.noise + B.noise + 1;
 
         return Serialize(Relinearize(R));
     }
@@ -283,6 +292,11 @@ public:
 
         for (auto v : evk.relin_key) out << v << " ";
         out << "\n";
+
+        for (auto v : evk.rlk0) out << v << " ";
+        out << "\n";
+        for (auto v : evk.rlk1) out << v << " ";
+        out << "\n";
     }
 
     void LoadAllKeys(const std::string& path) override {
@@ -293,17 +307,67 @@ public:
         pk.a.resize(POLY_DEGREE);
         pk.b.resize(POLY_DEGREE);
         evk.relin_key.resize(POLY_DEGREE);
+        evk.rlk0.resize(POLY_DEGREE);
+        evk.rlk1.resize(POLY_DEGREE);
 
         for (auto& v : sk.s) in >> v;
         for (auto& v : pk.a) in >> v;
         for (auto& v : pk.b) in >> v;
         for (auto& v : evk.relin_key) in >> v;
+        for (auto& v : evk.rlk0) in >> v;
+        for (auto& v : evk.rlk1) in >> v;
     }
 
     void LoadEvalKeys(const std::string& path) override {
         std::ifstream in(path);
         evk.relin_key.resize(POLY_DEGREE);
         for (auto& v : evk.relin_key) in >> v;
+    }
+    std::string EncryptBatch(const std::vector<int64_t>& values) override {
+
+        auto m = Encode(values);
+
+        std::vector<int64_t> u(POLY_DEGREE);
+        for (int i = 0; i < POLY_DEGREE; i++)
+            u[i] = rand() % 2;
+
+        auto bu = PolyMul(pk.b, u);
+        auto au = PolyMul(pk.a, u);
+
+        Ciphertext ct;
+        ct.c0.resize(POLY_DEGREE);
+        ct.c1.resize(POLY_DEGREE);
+        ct.c2.assign(POLY_DEGREE, 0);
+        ct.noise = 1;
+
+        for (int i = 0; i < POLY_DEGREE; i++) {
+            ct.c0[i] = Mod(bu[i] + m[i]);
+            ct.c1[i] = Mod(au[i]);
+        }
+
+        return Serialize(ct);
+    }
+    std::vector<int64_t> DecryptBatch(const std::string& cipher) override {
+
+        Ciphertext ct = Deserialize(cipher);
+        auto s_c1 = PolyMul(sk.s, ct.c1);
+
+        std::vector<int64_t> result(POLY_DEGREE);
+
+        for (int i = 0; i < POLY_DEGREE; i++) {
+            int64_t val = Mod(ct.c0[i] + s_c1[i]);
+
+            if (val > Q / 2)
+                val -= Q;
+
+            val %= T;
+            if (val < 0)
+                val += T;
+
+            result[i] = val;
+        }
+
+        return result;
     }
 };
 

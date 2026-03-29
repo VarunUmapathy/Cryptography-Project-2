@@ -3,7 +3,7 @@
 #include <vector>
 
 struct Ciphertext {
-    std::vector<int64_t> c0,c1,c2;   
+    std::vector<int64_t> c0, c1, c2;   
     int noise;                 
 };
 
@@ -17,6 +17,8 @@ struct SecretKey {
 };
 
 struct EvalKey {
+    std::vector<int64_t> rlk0; // NEW
+    std::vector<int64_t> rlk1; // NEW
     std::vector<int64_t> relin_key;
 };
 
@@ -28,8 +30,13 @@ public:
     virtual std::string Serialize(const Ciphertext& ct) = 0;
     virtual Ciphertext Deserialize(const std::string& s) = 0;
 
+    // SIMD-aware (still compatible)
     virtual std::string Encrypt(int64_t value) = 0;
     virtual int64_t Decrypt(const std::string& ciphertext) = 0;
+
+    // NEW (optional SIMD support)
+    virtual std::string EncryptBatch(const std::vector<int64_t>& values) = 0;
+    virtual std::vector<int64_t> DecryptBatch(const std::string& ciphertext) = 0;
 
     virtual std::string Add(const std::string& a, const std::string& b) = 0;
     virtual std::string Multiply(const std::string& a, const std::string& b) = 0;
