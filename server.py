@@ -94,11 +94,22 @@ async def view_parquet(stage: str):
             row_dict = {}
             for col in df.columns:
                 val = row[col]
-                if isinstance(val, bytes):
-                    # Send the FULL hex string to the frontend with a marker
-                    row_dict[col] = f"CIPHERTEXT_FULL:{val.hex().upper()}"
+                if isinstance(val, (bytes, bytearray, memoryview)):
+                    hex_val = bytes(val).hex().upper()
+                    row_dict[col] = f"CIPHERTEXT_FULL:{hex_val}"
+                elif isinstance(val, str) and ("," in val and "|" in val):
+                    row_dict[col] = f"CIPHERTEXT_FULL:{val}"
+                # Handle numpy arrays (VERY common with Parquet)
+                elif hasattr(val, "tobytes"):
+                    hex_val = val.tobytes().hex().upper()
+                    row_dict[col] = f"CIPHERTEXT_FULL:{hex_val}"
+                elif isinstance(val, str) and (
+                    len(val) > 40
+                ):
+                    row_dict[col] = f"CIPHERTEXT_FULL:{val}"
                 else:
                     row_dict[col] = str(val)
+                    print(f"{type(row_dict[col])}: {row_dict[col]}")
             display_data.append(row_dict)
 
         return {"columns": df.columns.tolist(), "rows": display_data}

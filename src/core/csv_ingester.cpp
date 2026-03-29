@@ -49,11 +49,10 @@ void IngestCSV(const std::string& csvFile,
         if (isHeader) { isHeader = false; continue; }
 
         auto cells = SplitCSVLine(line);
-
+        rows++;
         for (size_t i = 0; i < 4; ++i) {
             auto rule = schema.columns[i].encType;
             std::string val = cells[i];
-            rows++;
             if (rule == EncryptionType::PLAINTEXT) {
                 if (!job_builder.Append(val).ok()) {
                     std::cerr << "Append failed\n";

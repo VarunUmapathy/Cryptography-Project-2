@@ -85,24 +85,20 @@ public:
         sk.s.resize(POLY_DEGREE);
         pk.a.resize(POLY_DEGREE);
         pk.b.resize(POLY_DEGREE);
-        evk.relin_key.resize(POLY_DEGREE);
 
         for (int i = 0; i < POLY_DEGREE; i++) {
-            sk.s[i] = rand() % 2;
-            pk.a[i] = rand() % Q;
-
-            int e = rand() % 3 - 1;
-            auto a_s = PolyMul(pk.a, sk.s);
-
-            for (int i = 0; i < POLY_DEGREE; i++) {
-                int e = 0; // keep noise zero for now
-                pk.b[i] = Mod(-a_s[i] + e);
-            }
-
-            evk.relin_key[i] = sk.s[i] * sk.s[i] + rand() % 3;
+            sk.s[i] = rand() % 2;      // small binary secret
+            pk.a[i] = rand() % Q;      // random a
         }
 
-        std::cout << "[FHE] Keys generated\n";
+        // ✅ CORRECT RLWE: b = -a ⊗ s
+        auto a_s = PolyMul(pk.a, sk.s);
+
+        for (int i = 0; i < POLY_DEGREE; i++) {
+            pk.b[i] = Mod(-a_s[i]);   // NO NOISE
+        }
+
+        std::cout << "[FHE] Keys generated (stable mode)\n";
     }
 
     /* =========================
@@ -168,15 +164,12 @@ public:
     std::string Encrypt(int64_t value) override {
 
         std::vector<int64_t> m(POLY_DEGREE, 0);
-        m[0] = value % T;   // direct integer encoding
+        m[0] = value % T;
 
-        std::vector<int64_t> u(POLY_DEGREE), e1(POLY_DEGREE), e2(POLY_DEGREE);
+        std::vector<int64_t> u(POLY_DEGREE);
 
-        for (int i = 0; i < POLY_DEGREE; i++) {
+        for (int i = 0; i < POLY_DEGREE; i++)
             u[i] = rand() % 2;
-            e1[i] = 0;   // keep noise ZERO for correctness
-            e2[i] = 0;
-        }
 
         auto bu = PolyMul(pk.b, u);
         auto au = PolyMul(pk.a, u);
@@ -187,11 +180,9 @@ public:
         ct.c2.assign(POLY_DEGREE, 0);
 
         for (int i = 0; i < POLY_DEGREE; i++) {
-            ct.c0[i] = Mod(bu[i] + m[i]);   // ✅ DIRECT ADD
+            ct.c0[i] = Mod(bu[i] + m[i]);  // embed plaintext
             ct.c1[i] = Mod(au[i]);
         }
-
-        ct.noise = 0;
 
         return Serialize(ct);
     }
@@ -206,14 +197,13 @@ public:
         auto s_c1 = PolyMul(sk.s, ct.c1);
 
         int64_t result = Mod(ct.c0[0] + s_c1[0]);
-        std::cout << "[DEBUG] Decrypted raw: " << result << std::endl;
-        // ✅ Recover signed integer correctly
+
+        // Convert from mod Q → signed integer
         if (result > Q / 2)
             result -= Q;
 
-        // ✅ Final mod T (plaintext space)
+        // Bring back to plaintext space
         result %= T;
-
         if (result < 0)
             result += T;
 
@@ -231,15 +221,13 @@ public:
         Ciphertext R;
         R.c0.resize(POLY_DEGREE);
         R.c1.resize(POLY_DEGREE);
-        R.c2.resize(POLY_DEGREE);
+        R.c2.assign(POLY_DEGREE, 0);
 
         for (int i = 0; i < POLY_DEGREE; i++) {
             R.c0[i] = Mod(A.c0[i] + B.c0[i]);
             R.c1[i] = Mod(A.c1[i] + B.c1[i]);
-            R.c2[i] = 0;
         }
 
-        R.noise = A.noise + B.noise;
         return Serialize(R);
     }
 

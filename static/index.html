@@ -182,7 +182,22 @@
                         // If it's a ciphertext, render a button instead of the string!
                         if (typeof cellValue === 'string' && cellValue.startsWith("CIPHERTEXT_FULL:")) {
                             let fullHex = cellValue.substring(16);
-                            let bytes = (fullHex.length / 2).toLocaleString();
+                            let bytes;
+
+                            if (/^[0-9A-F]+$/i.test(fullHex)) {
+                                // HEX
+                                bytes = Math.floor(fullHex.length / 2);
+                            }
+                            else if (/^[A-Za-z0-9+/=]+$/.test(fullHex)) {
+                                // BASE64
+                                bytes = Math.floor((fullHex.length * 3) / 4);
+                            }
+                            else {
+                                // FHE polynomial string (approximate)
+                                bytes = new Blob([fullHex]).size;
+                            }
+
+                            bytes = bytes.toLocaleString();
                             let cid = 'cipher_' + cipherCounter++;
                             
                             // Save string to memory
