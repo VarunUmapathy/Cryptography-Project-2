@@ -2,8 +2,8 @@
   "dataset_name": "sf_salaries",
   "columns": [
     {"name": "EmployeeName", "type": "string", "encryption": "AES_GCM"},
-    {"name": "JobTitle", "type": "string", "encryption": "PLAINTEXT"},
-    {"name": "BasePay", "type": "integer", "encryption": "FHE_BFV"},
-    {"name": "OvertimePay", "type": "integer", "encryption": "FHE_BFV"}
+    {"name": "JobTitle", "type": "string", "encryption": "AES_GCM"},
+    {"name": "BasePay", "type": "integer", "encryption": "AES_GCM"},
+    {"name": "OvertimePay", "type": "integer", "encryption": "AES_GCM"}
   ]
 }
