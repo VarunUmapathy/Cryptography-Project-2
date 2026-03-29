@@ -1,6 +1,7 @@
 #include "../../include/parquet_handler.h"
 #include "../../include/crypto_manager.h"
 #include "../../include/fhe_engine.h"
+#include "../../include/timer.h"
 
 #undef duration
 #include <arrow/api.h>
@@ -67,6 +68,9 @@ void DecryptShieldedParquet(
     CryptoContextManager& cryptoManager,
     FHEEngine* fhe
 ) {
+    Timer t;
+    double aes_dec_time = 0;
+    double fhe_dec_time = 0;
     // Open file
     auto open_res = arrow::io::ReadableFile::Open(inFile);
     if (!open_res.ok()) {
@@ -100,7 +104,7 @@ void DecryptShieldedParquet(
         table->GetColumnByName("OvertimePay")->chunk(0));
 
     json results = json::array();
-
+    int rows = table->num_rows();
     for (int64_t i = 0; i < table->num_rows(); i++) {
         json row;
 
@@ -109,19 +113,27 @@ void DecryptShieldedParquet(
         std::string overtime_blob = overtime_col->GetString(i);
 
         // AES decrypt
-        //std::cout << "[READ] From Parquet: " << name_blob << std::endl;
+        //std::cout << "[READ] From Parquet: " << name_blob << std::endl
+        t.Start();
         row["EmployeeName"] = cryptoManager.AESDecrypt(name_blob);
+        aes_dec_time += t.Stop();
 
         // Plaintext
         row["JobTitle"] = job_col->GetString(i);
 
         // FHE decrypt via abstraction
+        t.Start();
         row["BasePay_Doubled"] = fhe->Decrypt(basepay_blob);
+        fhe_dec_time += t.Stop();
         row["OvertimePay"] = fhe->Decrypt(overtime_blob);
 
         results.push_back(row);
     }
-
+    std::cout << "\n--- DECRYPT METRICS ---\n";
+    std::cout << "Rows: " << rows << "\n";
+    std::cout << "AES Decrypt Time: " << aes_dec_time << " sec\n";
+    std::cout << "FHE Decrypt Time: " << fhe_dec_time << " sec\n";
+    std::cout << "Throughput: " << rows / (aes_dec_time + fhe_dec_time) << " rows/sec\n";
     std::cout << "\n--- FINAL DECRYPTED DATA ---\n";
     std::cout << results.dump(4) << std::endl;
 }
@@ -136,6 +148,8 @@ void ProcessCloudCompute(
     FHEEngine* fhe
 ) {
     // Open file
+    Timer t;
+    double compute_time = 0;
     auto open_res = arrow::io::ReadableFile::Open(inFile);
     if (!open_res.ok()) {
         std::cerr << "Error opening input file\n";
@@ -170,6 +184,7 @@ void ProcessCloudCompute(
     // Builders for new file
     arrow::StringBuilder new_name, new_basepay, new_overtime;
     arrow::StringBuilder new_job;
+    int rows = table->num_rows();
     //std::cout << "[DEBUG] Input rows: " << table->num_rows() << "\n";
     for (int64_t i = 0; i < table->num_rows(); i++) {
         std::string enc_base = basepay_col->GetString(i);
@@ -188,12 +203,17 @@ void ProcessCloudCompute(
         }
 
         // Homomorphic (simulated) addition
+        t.Start();
         std::string doubled = fhe->Add(enc_base, enc_base);
+        compute_time += t.Stop();
         if (!new_basepay.Append(doubled).ok()) {
             std::cerr << "Append basepay failed\n"; return;
         }
     }
-
+    std::cout << "\n--- CLOUD METRICS ---\n";
+    std::cout << "Rows: " << rows << "\n";
+    std::cout << "Compute Time: " << compute_time << " sec\n";
+    std::cout << "Throughput: " << rows / compute_time << " rows/sec\n";
     // Finalize arrays
     std::shared_ptr<arrow::Array> name_arr, job_arr, base_arr, over_arr;
     if (!new_name.Finish(&name_arr).ok() ||

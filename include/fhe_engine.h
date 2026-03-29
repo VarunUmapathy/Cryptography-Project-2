@@ -3,8 +3,21 @@
 #include <vector>
 
 struct Ciphertext {
-    int64_t value;
-    int noise;
+    std::vector<int64_t> c0,c1,c2;   
+    int noise;                 
+};
+
+struct PublicKey {
+    std::vector<int64_t> a;
+    std::vector<int64_t> b;
+};
+
+struct SecretKey {
+    std::vector<int64_t> s;
+};
+
+struct EvalKey {
+    std::vector<int64_t> relin_key;
 };
 
 class FHEEngine {

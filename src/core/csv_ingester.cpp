@@ -1,5 +1,6 @@
 #include "../../include/csv_ingester.h"
 #include "../../include/fhe_engine.h"
+#include "../../include/timer.h"
 #include <iostream>
 #include <fstream>
 #include <sstream>
@@ -28,7 +29,11 @@ void IngestCSV(const std::string& csvFile,
                const DatasetSchema& schema,
                CryptoContextManager& cryptoManager,
                FHEEngine* fhe) {
+    double aes_time = 0;
+    double fhe_time = 0;
+    int rows = 0;
 
+    Timer t;
     std::ifstream file(csvFile);
     if (!file.is_open()) return;
 
@@ -48,26 +53,28 @@ void IngestCSV(const std::string& csvFile,
         for (size_t i = 0; i < 4; ++i) {
             auto rule = schema.columns[i].encType;
             std::string val = cells[i];
-
+            rows++;
             if (rule == EncryptionType::PLAINTEXT) {
                 if (!job_builder.Append(val).ok()) {
                     std::cerr << "Append failed\n";
                 }
             }
             else if (rule == EncryptionType::AES_GCM) {
+                t.Start();
                 std::string enc = cryptoManager.AESEncrypt(val);
 
                 //std::cout << "[INGEST] Plain: " << val << std::endl;
                 //std::cout << "[INGEST] Encrypted(Base64): " << enc << std::endl;
-
+                aes_time += t.Stop();
                 if (!name_builder.Append(enc).ok()) {
                     std::cerr << "Append failed\n";
                 }
                 //name_builder.Append(cryptoManager.AESEncrypt(val));
             }
             else if (rule == EncryptionType::FHE_BFV) {
+                t.Start();
                 std::string enc = fhe->Encrypt(std::stoll(val));
-
+                fhe_time += t.Stop();
                 if (i == 2){
                     if (!basepay_builder.Append(enc).ok()) {
                         std::cerr << "Append failed\n";
@@ -81,7 +88,11 @@ void IngestCSV(const std::string& csvFile,
             }
         }
     }
-
+    std::cout << "\n--- INGEST METRICS ---\n";
+    std::cout << "Rows: " << rows << "\n";
+    std::cout << "AES Time: " << aes_time << " sec\n";
+    std::cout << "FHE Time: " << fhe_time << " sec\n";
+    std::cout << "Throughput: " << rows / (aes_time + fhe_time) << " rows/sec\n";
     std::shared_ptr<arrow::Array> name_arr, job_arr, base_arr, over_arr;
     if (!name_builder.Finish(&name_arr).ok()) {
         std::cerr << "name finish failed\n";
