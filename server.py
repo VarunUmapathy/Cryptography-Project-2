@@ -5,6 +5,7 @@ import subprocess
 import os
 import shutil
 import pandas as pd
+import json # ADDED: Required for reading the schema and parsing C++ output
 
 app = FastAPI(title="Shielded-Parquet API")
 
@@ -39,7 +40,7 @@ def run_cpp_engine(args: list) -> dict:
 
 @app.post("/api/upload")
 async def upload_and_ingest(csv_file: UploadFile = File(...), schema_file: UploadFile = File(...)):
-    """Receives files from the UI and triggers the 'ingest' phase."""
+    """Receives files from the UI, scales decimals for FHE, and triggers the 'ingest' phase."""
     csv_path = os.path.join(TEMP_DIR, "data.csv")
     schema_path = os.path.join(TEMP_DIR, "schema.json")
     out_parquet = os.path.join(TEMP_DIR, "hybrid.parquet")
@@ -49,6 +50,27 @@ async def upload_and_ingest(csv_file: UploadFile = File(...), schema_file: Uploa
         shutil.copyfileobj(csv_file.file, buffer)
     with open(schema_path, "wb") as buffer:
         shutil.copyfileobj(schema_file.file, buffer)
+        
+    # --- ADDED: PRE-PROCESSING FOR FHE DECIMALS ---
+    try:
+        with open(schema_path, "r") as f:
+            schema = json.load(f)
+        
+        # Identify which columns are routed to FHE
+        fhe_cols = [col for col, enc_type in schema.get("encryption_routing", {}).items() if enc_type == "FHE"]
+        
+        if fhe_cols:
+            df = pd.read_csv(csv_path)
+            for col in fhe_cols:
+                if col in df.columns:
+                    # Coerce errors to NaN, fill NaNs with 0, scale by 100, and cast to integer
+                    df[col] = pd.to_numeric(df[col], errors='coerce').fillna(0)
+                    df[col] = (df[col] * 100).astype(int)
+            # Overwrite the CSV with the integer-scaled version before passing to C++
+            df.to_csv(csv_path, index=False)
+    except Exception as e:
+        raise HTTPException(status_code=400, detail=f"Data Pre-processing failed: {str(e)}")
+    # ----------------------------------------------
         
     # Call: ./ShieldedParquet ingest temp_data/data.csv temp_data/schema.json temp_data/hybrid.parquet
     result = run_cpp_engine(["ingest", csv_path, schema_path, out_parquet])
@@ -66,12 +88,36 @@ async def simulate_cloud_compute():
 
 @app.get("/api/results")
 async def decrypt_results():
-    """Triggers the 'decrypt' phase and returns the results."""
+    """Triggers the 'decrypt' phase, restores decimals, and returns the results."""
     in_parquet = os.path.join(TEMP_DIR, "hybrid_computed.parquet")
+    schema_path = os.path.join(TEMP_DIR, "schema.json")
     
     # Call: ./ShieldedParquet decrypt temp_data/hybrid_computed.parquet
     result = run_cpp_engine(["decrypt", in_parquet])
-    return {"message": "Decryption complete", "data": result["output"]}
+    
+    # --- ADDED: POST-PROCESSING FOR FHE DECIMALS ---
+    try:
+        # Assuming the C++ outputs a JSON string of the decrypted rows
+        decrypted_data = json.loads(result["output"])
+        
+        if os.path.exists(schema_path):
+            with open(schema_path, "r") as f:
+                schema = json.load(f)
+                
+            fhe_cols = [col for col, enc_type in schema.get("encryption_routing", {}).items() if enc_type == "FHE"]
+            
+            # Loop through the results and divide FHE columns by 100 to restore decimals
+            for row in decrypted_data:
+                for col in fhe_cols:
+                    if col in row and isinstance(row[col], (int, float)):
+                        row[col] = row[col] / 100.0
+                        
+        return {"message": "Decryption complete", "data": decrypted_data}
+        
+    except json.JSONDecodeError:
+        # Fallback if the C++ engine didn't return valid JSON
+        return {"message": "Decryption complete", "data": result["output"]}
+    # -----------------------------------------------
 
 @app.get("/api/view/{stage}")
 async def view_parquet(stage: str):
