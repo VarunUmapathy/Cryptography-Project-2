@@ -84,7 +84,6 @@
         // Global object to store massive ciphertexts in memory instead of the HTML DOM
         window.cipherStore = {};
         let cipherCounter = 0;
-
         async function uploadFiles() {
             const csv = document.getElementById('csvFile').files[0];
             const schema = document.getElementById('schemaFile').files[0];
@@ -179,7 +178,7 @@
                     html += "<tr>";
                     data.columns.forEach(col => {
                         let cellValue = row[col];
-                        
+                        console.log(cellValue);
                         // If it's a ciphertext, render a button instead of the string!
                         if (typeof cellValue === 'string' && cellValue.startsWith("CIPHERTEXT_FULL:")) {
                             let fullHex = cellValue.substring(16);

@@ -50,7 +50,9 @@ void IngestCSV(const std::string& csvFile,
             std::string val = cells[i];
 
             if (rule == EncryptionType::PLAINTEXT) {
-                job_builder.Append(val);
+                if (!job_builder.Append(val).ok()) {
+                    std::cerr << "Append failed\n";
+                }
             }
             else if (rule == EncryptionType::AES_GCM) {
                 std::string enc = cryptoManager.AESEncrypt(val);
@@ -66,17 +68,33 @@ void IngestCSV(const std::string& csvFile,
             else if (rule == EncryptionType::FHE_BFV) {
                 std::string enc = fhe->Encrypt(std::stoll(val));
 
-                if (i == 2) basepay_builder.Append(enc);
-                if (i == 3) overtime_builder.Append(enc);
+                if (i == 2){
+                    if (!basepay_builder.Append(enc).ok()) {
+                        std::cerr << "Append failed\n";
+                    }
+                }
+                if (i == 3){
+                    if (!overtime_builder.Append(enc).ok()) {
+                        std::cerr << "Append failed\n";
+                    }
+                }
             }
         }
     }
 
     std::shared_ptr<arrow::Array> name_arr, job_arr, base_arr, over_arr;
-    name_builder.Finish(&name_arr);
-    job_builder.Finish(&job_arr);
-    basepay_builder.Finish(&base_arr);
-    overtime_builder.Finish(&over_arr);
+    if (!name_builder.Finish(&name_arr).ok()) {
+        std::cerr << "name finish failed\n";
+    }
+    if (!job_builder.Finish(&job_arr).ok()) {
+        std::cerr << "name finish failed\n";
+    }
+    if (!basepay_builder.Finish(&base_arr).ok()) {
+        std::cerr << "name finish failed\n";
+    }
+    if (!overtime_builder.Finish(&over_arr).ok()) {
+        std::cerr << "name finish failed\n";
+    }
 
     auto schema_arrow = arrow::schema({
         arrow::field("EmployeeName", arrow::utf8()),
@@ -88,5 +106,8 @@ void IngestCSV(const std::string& csvFile,
     auto table = arrow::Table::Make(schema_arrow, {name_arr, job_arr, base_arr, over_arr});
 
     auto outfile = arrow::io::FileOutputStream::Open(parquetOutFile).ValueOrDie();
-    parquet::arrow::WriteTable(*table, arrow::default_memory_pool(), outfile, 1);
+    auto status = parquet::arrow::WriteTable(*table, arrow::default_memory_pool(), outfile, 1);
+    if (!status.ok()) {
+        std::cerr << "WriteTable failed: " << status.ToString() << "\n";
+    }
 }

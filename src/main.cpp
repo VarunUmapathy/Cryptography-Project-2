@@ -8,41 +8,10 @@
 #include <string>
 
 /* =========================
-   SIMPLE FHE ENGINE
-   ========================= */
-class SimpleFHEEngine : public FHEEngine {
-public:
-    void Initialize() override {
-        std::cout << "[SimpleFHE] Initialized (no-op)\n";
-    }
-
-    void GenerateKeys() override {
-        std::cout << "[SimpleFHE] No keys required\n";
-    }
-
-    std::string Encrypt(int64_t value) override {
-        return "ENC(" + std::to_string(value) + ")";
-    }
-
-    int64_t Decrypt(const std::string& cipher) override {
-        return std::stoll(cipher.substr(4, cipher.size() - 1));
-    }
-
-    std::string Add(const std::string& a, const std::string& b) override {
-        int64_t x = Decrypt(a);
-        int64_t y = Decrypt(b);
-        return Encrypt(x + y);
-    }
-
-    void SaveKeys(const std::string&) override {}
-    void LoadEvalKeys(const std::string&) override {}
-    void LoadAllKeys(const std::string&) override {}
-};
-
-/* =========================
    MAIN
    ========================= */
 int main(int argc, char* argv[]) {
+    FHEEngine* fhe = CreateFHEEngine();
     if (argc < 2) {
         std::cerr << "Usage:\n";
         std::cerr << "  ingest <csv> <schema> <out_parquet>\n";
@@ -55,7 +24,6 @@ int main(int argc, char* argv[]) {
     std::string key_dir = "temp_data/";
 
     CryptoContextManager cryptoManager;
-    FHEEngine* fhe = new SimpleFHEEngine();
 
     /* =========================
        INGEST PHASE
